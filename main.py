@@ -5,6 +5,7 @@ import subprocess
 import requests
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+import platform
 
 scriptFolder = os.path.dirname(os.path.abspath(__file__))
 configPath = os.path.join(scriptFolder, "config.json")
