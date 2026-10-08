@@ -1,12 +1,13 @@
-import sys
-import os
+import csv
 import json
+import os
+import platform
 import subprocess
-import requests
+import sys
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-import platform
-import csv
+
+import requests
 
 scriptFolder = os.path.dirname(os.path.abspath(__file__))
 configPath = os.path.join(scriptFolder, "config.json")
@@ -78,9 +79,7 @@ def findFirstMatch(matches):
         if not apiTime:
             continue
         localTime = convertTime(apiTime)
-        if firstMatchStartTime is None:
-            firstMatchStartTime = localTime
-        elif localTime < firstMatchStartTime:
+        if firstMatchStartTime is None or localTime < firstMatchStartTime:
             firstMatchStartTime = localTime
     return firstMatchStartTime
 
@@ -91,9 +90,7 @@ def findLastMatch(matches):
         if not apiTime:
             continue
         localTime = convertTime(apiTime)
-        if lastMatchStartTime is None:
-            lastMatchStartTime = localTime
-        elif localTime > lastMatchStartTime:
+        if lastMatchStartTime is None or localTime > lastMatchStartTime:
             lastMatchStartTime = localTime
     return lastMatchStartTime
 
@@ -188,8 +185,7 @@ def scheduleDailyRefresh(matchesByDay):
     for weekStart in sorted(weekStarts):
         weekEnd = weekStart + timedelta(days = 6)
         startDate = weekStart
-        if startDate < tomorrow:
-            startDate = tomorrow
+        startDate = max(startDate, tomorrow)
         if startDate > weekEnd:
             print(f"No future midnight refreshes remain for the week of {weekStart}")
             continue
@@ -260,8 +256,7 @@ def scheduleJoiner(day, firstMatchTime, launchPath):
         second = 0,
         microsecond = 0
     )
-    if launchTime <= minimumLaunchTime:
-        launchTime = minimumLaunchTime
+    launchTime = max(minimumLaunchTime, launchTime)
     systemLaunchTime = launchTime.astimezone()
     taskName = (f"R6_DROPS_{day.isoformat()}")
     dateText = systemLaunchTime.strftime("%m/%d/%Y")
