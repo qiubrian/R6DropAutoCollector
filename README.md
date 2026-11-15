@@ -31,7 +31,10 @@ python main.py check api 2026-11-13 --json
 
 ### Check scheduled Windows tasks
 
+The task checker displays launch times in your configured local time zone. Use `--json` for machine-readable output.
+
 ```bash
 python main.py check tasks
 python main.py check tasks 2026-11-13
+python main.py check tasks 2026-11-13 --json
 ```

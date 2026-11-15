@@ -99,6 +99,9 @@ def convertTime(apiTime):
     localTime = originalTime.astimezone(userTimeZone)
     return localTime
 
+def formatLocalTime(localTime):
+    return localTime.strftime("%I:%M %p %Z").lstrip("0")
+
 def matchSummary(match):
     league = (match.get("league") or {}).get("name") or ""
     series = match.get("serie") or {}
@@ -114,7 +117,7 @@ def matchSummary(match):
         teamNames.append("TBD")
     teams = " vs ".join(teamNames) if teamNames else match.get("name") or "TBD"
 
-    start = convertTime(match["begin_at"]).strftime("%I:%M %p %Z").lstrip("0")
+    start = formatLocalTime(convertTime(match["begin_at"]))
     status = match.get("status") or "unknown"
     statusLabel = "Live" if status == "running" else status.replace("_", " ").capitalize()
     scoreLabel = "-"
@@ -135,30 +138,23 @@ def matchSummary(match):
         formatLabel = f"{formatLabel} {gameCount}"
     return start, event or "-", stage or "-", teams, scoreLabel, formatLabel or "-", statusLabel
 
-def formatMatchTable(matches, day):
-    if not matches:
-        return f"No PandaScore matches for {day} ({userTimeZone})."
-
-    headers = ("Start time", "Event", "Stage", "Teams", "Score", "Format", "Status")
+def formatCheckTable(headers, values, title, wrapColumns):
     rows = [headers]
-    for match in matches:
-        summary = matchSummary(match)
-        cells = ("".join(ch if ch.isprintable() else " " for ch in cell) for cell in summary)
+    for row in values:
+        cells = ("".join(ch if ch.isprintable() else " " for ch in cell) for cell in row)
         rows.append(tuple(" ".join(cell.split()) for cell in cells))
 
     widths = [max(map(len, column)) for column in zip(*rows)]
     separator = " | "
     availableWidth = shutil.get_terminal_size(fallback=(112, 24)).columns
     while sum(widths) + len(separator) * (len(headers) - 1) > availableWidth:
-        wrappable = [index for index in (1, 2, 3) if widths[index] > len(headers[index])]
+        wrappable = [index for index in wrapColumns if widths[index] > len(headers[index])]
         if not wrappable:
             break
         column = max(wrappable, key=lambda index: widths[index])
         widths[column] -= 1
 
-    count = len(matches)
-    noun = "match" if count == 1 else "matches"
-    lines = [f"PandaScore | {day} ({userTimeZone}) | {count} {noun}", ""]
+    lines = [title, ""]
     for index, row in enumerate(rows):
         cells = [wrap(cell, width, break_on_hyphens=False) or [""] for cell, width in zip(row, widths)]
         for line in zip_longest(*cells, fillvalue=""):
@@ -166,6 +162,38 @@ def formatMatchTable(matches, day):
         if index == 0:
             lines.append("-+-".join("-" * width for width in widths))
     return "\n".join(lines)
+
+def formatMatchTable(matches, day):
+    if not matches:
+        return f"No PandaScore matches for {day} ({userTimeZone})."
+
+    headers = ("Start time", "Event", "Stage", "Teams", "Score", "Format", "Status")
+    count = len(matches)
+    noun = "match" if count == 1 else "matches"
+    title = f"PandaScore | {day} ({userTimeZone}) | {count} {noun}"
+    return formatCheckTable(headers, (matchSummary(match) for match in matches), title, (1, 2, 3))
+
+def formatTaskTable(tasks, day):
+    if not tasks:
+        return f"No collector tasks scheduled for {day} ({userTimeZone})."
+
+    rows = []
+    for task in tasks:
+        name = task["task_name"]
+        if name == DISCOVERY_TASK_NAME:
+            taskType = "Weekly discovery"
+        elif name.startswith("R6_DROPS_REFRESH_"):
+            taskType = "Daily refresh"
+        else:
+            taskType = "Twitch launch"
+        launchTime = datetime.fromisoformat(task["scheduled_at"]).astimezone(userTimeZone)
+        status = "Enabled" if task["enabled"] else "Disabled"
+        rows.append((formatLocalTime(launchTime), taskType, name, status))
+
+    count = len(tasks)
+    noun = "task" if count == 1 else "tasks"
+    title = f"Windows Task Scheduler | {day} ({userTimeZone}) | {count} {noun}"
+    return formatCheckTable(("Launch time", "Activity", "Task name", "Status"), rows, title, (1, 2))
 
 def findFirstMatch(matches):
     firstMatchStartTime = None
@@ -521,7 +549,7 @@ def checkDay(argv):
     parser = argparse.ArgumentParser(prog="python main.py check")
     parser.add_argument("source", choices=("api", "tasks"))
     parser.add_argument("date", nargs="?", type=parseDay, help="YYYY-MM-DD, defaults to today.")
-    parser.add_argument("--json", action="store_true", help="Print full PandaScore match records.")
+    parser.add_argument("--json", action="store_true", help="Print records as JSON.")
     args = parser.parse_intermixed_args(argv)
     day = args.date or datetime.now(userTimeZone).date()
     try:
@@ -537,7 +565,8 @@ def checkDay(argv):
                 return 1
             from task_checker import list_scheduled_tasks
 
-            output = json.dumps(list_scheduled_tasks(day, userTimeZone), indent=2)
+            tasks = list_scheduled_tasks(day, userTimeZone)
+            output = json.dumps(tasks, indent=2) if args.json else formatTaskTable(tasks, day)
     except (requests.RequestException, RuntimeError, OverflowError, ValueError) as error:
         print(f"Could not check {args.source} for {day}: {error}", file=sys.stderr)
         return 1
