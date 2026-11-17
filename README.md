@@ -3,6 +3,8 @@ Combining the Twitch auto joiner script with a built in and autonomous checker t
 
 This project works by taking information from PandaScore API for future siege games, running it through a filter that only includes games that would likely have twitch drops, and schedules the twitch autojoiner to join streams an interchangable amount of time before games, even when your laptop is asleep. To configure, create a config.json file by following the example format and inserting your PandaScore API key and timezone as well as the events you would like to set the autowatcher for.
 
+Currently the project only supports Windows, I have plans to make it MacOS usable but its a nonpriority 
+
 ## Usage
 
 Run these commands from the project folder on Windows.
